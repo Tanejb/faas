@@ -1,0 +1,11 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Za lokalni razvoj in Functions uporabljamo Admin SDK.
+    // Pravila se bodo po koraku 1–2 zaostrla za neposreden dostop iz klienta.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

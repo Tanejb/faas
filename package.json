@@ -1,0 +1,19 @@
+{
+  "name": "campus-hub-faas",
+  "version": "1.0.0",
+  "private": true,
+  "description": "CampusHub — serverless backend (Firebase FaaS) for ITA",
+  "scripts": {
+    "emulators": "firebase emulators:start --import=./emulator-data --export-on-exit=./emulator-data",
+    "emulators:demo": "firebase emulators:start --project demo-campushub --import=./emulator-data --export-on-exit=./emulator-data",
+    "emulators:clean": "firebase emulators:start",
+    "deploy:functions": "firebase deploy --only functions",
+    "deploy:rules": "firebase deploy --only firestore:rules,storage"
+  },
+  "devDependencies": {
+    "firebase-tools": "^13.35.1"
+  },
+  "engines": {
+    "node": "22"
+  }
+}

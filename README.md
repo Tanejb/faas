@@ -194,12 +194,12 @@ auditLogs/{logId}          (opcijsko, kasneje)
 | Korak | Vsebina | Status |
 |-------|---------|--------|
 | 0 | Repo, README, Firebase konfiguracija, emulatorji, `health` | ✅ |
-| 1 | Auth + profili + middleware | ⏳ |
+| 1 | Auth + profili + middleware | ✅ |
 | 2 | Dogodki (CRUD) + Firestore rules | ⏳ |
-| 3 | Prijave + Firestore triggerji | ⏳ |
-| 4 | Storage + triggerji | ⏳ |
-| 5 | Pub/Sub + MailHog | ⏳ |
-| 6 | Cron (opomniki, arhiv, poročilo) | ⏳ |
+| 3 | Prijave + Firestore triggerji | ✅ |
+| 4 | Storage + triggerji | ✅ |
+| 5 | Pub/Sub + MailHog | ✅ |
+| 6 | Cron (opomniki, arhiv, poročilo) | ✅ |
 | 7 | Postman kolekcija + testni scenariji | ⏳ |
 
 ---
@@ -315,6 +315,30 @@ faas/
 - **MailHog** — preverjanje poslanih e-poštnih obvestil.
 
 Navodila za posamezne scenarije bodo v `postman/` (korak 7).
+
+### Scheduled funkcije (cron) — lokalno testiranje
+
+Časovni dogodki (`onSchedule`) se v produkciji sprožijo samodejno; lokalno jih ročno poženeš iz Emulator UI, da ni treba čakati na urnik.
+
+1. Zaženi emulatorje: `npm run emulators`
+2. Odpri **Functions** v Emulator UI: http://127.0.0.1:4001/functions
+3. V seznamu poišči scheduled funkcije in klikni **Run function** (ali enakovreden gumb):
+   - `sendEventReminders` — dnevni opomniki
+   - `archiveOldEvents` — tedensko arhiviranje
+   - `generateWeeklyReport` — tedensko poročilo prijav
+4. Rezultat preveri v **Firestore** (http://127.0.0.1:4001/firestore):
+   - `reports` — vsaka funkcija doda zapis z `type` (`daily_reminders`, `archive_old_events`, `weekly_registrations`)
+   - `notifications` — pri `sendEventReminders` (če so izpolnjeni pogoji spodaj)
+
+**Priprava testnih podatkov (priporočeno):**
+
+| Funkcija | Kaj mora obstajati v Firestore |
+|----------|--------------------------------|
+| `sendEventReminders` | `events` z `status: "published"` in `startAt` v naslednjih **24 urah** (ISO niz, npr. jutrišnji datum) |
+| `archiveOldEvents` | `events` z `status: "published"` in `endAt` **starejšim od ~30 dni** |
+| `generateWeeklyReport` | vsaj ena prijava v `events/{eventId}/registrations` (`status: "registered"` ali `"cancelled"`) |
+
+Če po ročnem zagonu v logu (zavihek **Logs** v Emulator UI) vidiš napako, preveri, da so emulatorji zagnani **po** zadnji spremembi `functions/index.js` (po potrebi `Ctrl+C` in ponovno `npm run emulators`).
 
 ---
 

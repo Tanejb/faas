@@ -303,8 +303,29 @@ faas/
 │   ├── index.js              ← izvozi vse funkcije
 │   ├── package.json
 │   └── src/                  ← moduli po korakih
+├── web/                      ← React frontend (Vite)
 └── postman/                  ← kolekcija (korak 7)
 ```
+
+---
+
+## Frontend (spletni vmesnik) — načrt
+
+| Korak | Vsebina | Status |
+|-------|---------|--------|
+| F0 | Scaffold `web/`, Firebase config, emulatorji, `/health` | ✅ |
+| F1 | Auth (register / login / logout) | ⏳ |
+| F2 | Profil (`getMyProfile`, `updateMyProfile`) | ⏳ |
+| F3 | Javni dogodki (`listEvents`, `getEventDetails`) | ⏳ |
+| F4 | Organizer: `createEvent`, `publishEvent` | ⏳ |
+| F5 | Student: `registerForEvent`, `cancelRegistration` | ⏳ |
+| F6 | Gradiva: `getUploadUrl` + Storage upload | ⏳ |
+| F7 | Admin: `setUserRole` | ⏳ |
+| F8 | Obvestila: `enqueueNotification` (+ prikaz) | ⏳ |
+| F9 | Admin: pogled **reports** (cron: `sendEventReminders`, `archiveOldEvents`, `generateWeeklyReport`) | ⏳ |
+| F10 | README, Firebase Hosting deploy | ⏳ |
+
+Podrobnosti zagona: [web/README.md](web/README.md).
 
 ---
 

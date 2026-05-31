@@ -133,7 +133,7 @@ Vsaka funkcionalnost je podprta z **več Cloud Functions** (callable, HTTP ali e
 | Funkcija | Tip | Opis |
 |----------|-----|------|
 | `enqueueNotification` | interno / callable | Objavi sporočilo na Pub/Sub topic `notifications` |
-| `processNotification` | Pub/Sub trigger | Pošlje e-pošto prek Nodemailer → MailHog |
+| `processNotification` | Pub/Sub trigger | Shrani obvestilo v Firestore `notifications` (UI prikaz) |
 | `onEventPublishedNotify` | Firestore trigger | Ob objavi dogodka enqueue “nov dogodek” |
 
 **Pub/Sub topic:** `notifications` (emulator v `firebase.json`)
@@ -161,7 +161,7 @@ Vsaka funkcionalnost je podprta z **več Cloud Functions** (callable, HTTP ali e
 | 5 | **Uporabniški dogodki** | Firebase Auth: ob ustvarjanju uporabnika |
 | 6 | **Integracijski / HTTP** | `onRequest` (seznam dogodkov) in `onCall` (zaščiteni API) |
 
-Obvestila: **MailHog + Pub/Sub** (brez FCM push).
+Obvestila: **Pub/Sub + Firestore** (prikaz v web appu; MailHog opcijsko kasneje).
 
 ---
 
@@ -195,7 +195,7 @@ auditLogs/{logId}          (opcijsko, kasneje)
 |-------|---------|--------|
 | 0 | Repo, README, Firebase konfiguracija, emulatorji, `health` | ✅ |
 | 1 | Auth + profili + middleware | ✅ |
-| 2 | Dogodki (CRUD) + Firestore rules | ⏳ |
+| 2 | Dogodki (CRUD) + Firestore rules | ✅ |
 | 3 | Prijave + Firestore triggerji | ✅ |
 | 4 | Storage + triggerji | ✅ |
 | 5 | Pub/Sub + MailHog | ✅ |
@@ -314,18 +314,35 @@ faas/
 | Korak | Vsebina | Status |
 |-------|---------|--------|
 | F0 | Scaffold `web/`, Firebase config, emulatorji, `/health` | ✅ |
-| F1 | Auth (register / login / logout) | ⏳ |
-| F2 | Profil (`getMyProfile`, `updateMyProfile`) | ⏳ |
-| F3 | Javni dogodki (`listEvents`, `getEventDetails`) | ⏳ |
-| F4 | Organizer: `createEvent`, `publishEvent` | ⏳ |
-| F5 | Student: `registerForEvent`, `cancelRegistration` | ⏳ |
-| F6 | Gradiva: `getUploadUrl` + Storage upload | ⏳ |
-| F7 | Admin: `setUserRole` | ⏳ |
-| F8 | Obvestila: `enqueueNotification` (+ prikaz) | ⏳ |
-| F9 | Admin: pogled **reports** (cron: `sendEventReminders`, `archiveOldEvents`, `generateWeeklyReport`) | ⏳ |
-| F10 | README, Firebase Hosting deploy | ⏳ |
+| F1 | Auth (register / login / logout) | ✅ |
+| F2 | Profil (`getMyProfile`, `updateMyProfile`) | ✅ |
+| F3 | Javni dogodki (`listEvents`, `getEventDetails`) | ✅ |
+| F4 | Organizer: `createEvent`, `publishEvent` | ✅ |
+| F5 | Student: `registerForEvent`, `cancelRegistration` | ✅ |
+| F6 | Gradiva: `getUploadUrl` + Storage upload | ✅ |
+| F7 | Admin: `setUserRole` | ✅ |
+| F8 | Obvestila: `enqueueNotification` (+ prikaz) | ✅ |
+| F9 | Admin: pogled **reports** (cron: `sendEventReminders`, `archiveOldEvents`, `generateWeeklyReport`) | ✅ |
+| F10 | README, Firebase Hosting deploy | ✅ |
 
-Podrobnosti zagona: [web/README.md](web/README.md).
+### Celoten zagon (backend + frontend)
+
+```bash
+# Terminal 1 — repo root
+npm install
+cd functions && npm install && cd ..
+npm run emulators
+
+# Terminal 2 — frontend
+cd web && cp .env.example .env && npm install && cd ..
+npm run dev:web
+```
+
+- Backend health: http://127.0.0.1:5001/faas-b43b4/us-central1/health  
+- Web app: http://localhost:5173  
+- Emulator UI: http://127.0.0.1:4001  
+
+Podrobnosti: [web/README.md](web/README.md).
 
 ---
 

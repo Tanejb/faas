@@ -1,61 +1,81 @@
-import { useState } from "react";
-import { fetchHealth } from "./api/health";
-import { projectId, useEmulators } from "./firebase";
+import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+import { AuthProvider, useAuth } from "./context/AuthContext";
+import { ProfileProvider } from "./context/ProfileContext";
+import AppShell from "./components/AppShell";
+import AuthPage from "./pages/AuthPage";
+import AccountPage from "./pages/AccountPage";
+import EventDetailPage from "./pages/EventDetailPage";
+import EventsPage from "./pages/EventsPage";
+import OrganizerGate from "./pages/OrganizerGate";
+import OrganizerMaterialsPage from "./pages/OrganizerMaterialsPage";
+import AdminGate from "./pages/AdminGate";
+import NotificationsPage from "./pages/NotificationsPage";
+import OrganizerNotifyPage from "./pages/OrganizerNotifyPage";
+import AdminReportsPage from "./pages/AdminReportsPage";
 import "./App.css";
 
-function App() {
-  const [health, setHealth] = useState(null);
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
+function AppContent() {
+  const { user, loading } = useAuth();
 
-  async function onCheckHealth() {
-    setLoading(true);
-    setError("");
-    setHealth(null);
-    try {
-      const data = await fetchHealth();
-      setHealth(data);
-    } catch (err) {
-      setError(err.message || "Request failed");
-    } finally {
-      setLoading(false);
-    }
+  if (loading) {
+    return (
+      <div className="loading-screen">
+        <p>Loading…</p>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <AuthPage />;
   }
 
   return (
-    <div className="app">
-      <header className="app-header">
-        <h1>CampusHub</h1>
-        <p className="subtitle">Serverless campus events — frontend (F0)</p>
-      </header>
-
-      <section className="card">
-        <h2>Environment</h2>
-        <ul className="meta">
-          <li>
-            <strong>Project:</strong> {projectId}
-          </li>
-          <li>
-            <strong>Emulators:</strong> {useEmulators ? "on" : "off"}
-          </li>
-        </ul>
-        <p className="hint">
-          Start backend first: <code>npm run emulators</code> (repo root).
-        </p>
-      </section>
-
-      <section className="card">
-        <h2>Backend health</h2>
-        <button type="button" onClick={onCheckHealth} disabled={loading}>
-          {loading ? "Checking…" : "Check /health"}
-        </button>
-        {error && <p className="error">{error}</p>}
-        {health && (
-          <pre className="json">{JSON.stringify(health, null, 2)}</pre>
-        )}
-      </section>
-    </div>
+    <ProfileProvider>
+      <BrowserRouter>
+        <Routes>
+          <Route element={<AppShell />}>
+            <Route index element={<Navigate to="/events" replace />} />
+            <Route path="events" element={<EventsPage />} />
+            <Route path="events/:eventId" element={<EventDetailPage />} />
+            <Route path="account" element={<AccountPage />} />
+            <Route path="notifications" element={<NotificationsPage />} />
+            <Route path="organize" element={<OrganizerGate />} />
+            <Route
+              path="organize/:eventId/materials"
+              element={
+                <OrganizerGate>
+                  <OrganizerMaterialsPage />
+                </OrganizerGate>
+              }
+            />
+            <Route
+              path="organize/:eventId/notify"
+              element={
+                <OrganizerGate>
+                  <OrganizerNotifyPage />
+                </OrganizerGate>
+              }
+            />
+            <Route path="admin" element={<AdminGate />} />
+            <Route
+              path="admin/reports"
+              element={
+                <AdminGate>
+                  <AdminReportsPage />
+                </AdminGate>
+              }
+            />
+          </Route>
+        </Routes>
+      </BrowserRouter>
+    </ProfileProvider>
   );
 }
 
-export default App;
+export default function App() {
+  return (
+    <AuthProvider>
+      <AppContent />
+    </AuthProvider>
+  );
+}

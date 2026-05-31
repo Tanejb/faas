@@ -298,6 +298,30 @@ exports.publishEvent = onCall(async (request) => {
   };
 });
 
+// Organizer/admin: seznam lastnih dogodkov (vklj. osnutki).
+exports.listMyEvents = onCall(async (request) => {
+  const auth = requireAuth(request);
+  await requireRole(auth, ["organizer", "admin"]);
+
+  const snap = await db
+    .collection("events")
+    .where("organizerId", "==", auth.uid)
+    .get();
+
+  const events = snap.docs
+    .map((doc) => ({
+      eventId: doc.id,
+      ...doc.data(),
+    }))
+    .sort((a, b) => {
+      const aTime = a.updatedAt?.toMillis?.() || 0;
+      const bTime = b.updatedAt?.toMillis?.() || 0;
+      return bTime - aTime;
+    });
+
+  return { events };
+});
+
 // Javni seznam objavljenih dogodkov.
 exports.listEvents = onRequest(async (req, res) => {
   if (req.method !== "GET") {
@@ -480,6 +504,34 @@ exports.cancelRegistration = onCall(async (request) => {
   };
 });
 
+// Vrne status prijave prijavljenega uporabnika za dogodek.
+exports.getMyRegistration = onCall(async (request) => {
+  const auth = requireAuth(request);
+  const eventId =
+    request.data && typeof request.data.eventId === "string"
+      ? request.data.eventId.trim()
+      : "";
+  if (!eventId) {
+    throw new HttpsError("invalid-argument", "Field 'eventId' is required.");
+  }
+
+  const regSnap = await db
+    .collection("events")
+    .doc(eventId)
+    .collection("registrations")
+    .doc(auth.uid)
+    .get();
+
+  if (!regSnap.exists) {
+    return { eventId, status: null };
+  }
+
+  return {
+    eventId,
+    status: regSnap.data().status || null,
+  };
+});
+
 // Ob novi prijavi zapišemo audit log.
 exports.onRegistrationCreated = onDocumentCreated(
   "events/{eventId}/registrations/{registrationId}",
@@ -560,6 +612,36 @@ exports.getUploadUrl = onCall(async (request) => {
     uploadHint:
       "Upload file to this exact path in Storage emulator (or SDK client).",
   };
+});
+
+// Seznam gradiv za dogodek (prijavljeni uporabniki).
+exports.listEventMaterials = onCall(async (request) => {
+  requireAuth(request);
+  const eventId =
+    request.data && typeof request.data.eventId === "string"
+      ? request.data.eventId.trim()
+      : "";
+  if (!eventId) {
+    throw new HttpsError("invalid-argument", "Field 'eventId' is required.");
+  }
+
+  const snap = await db
+    .collection("materials")
+    .where("eventId", "==", eventId)
+    .get();
+
+  const materials = snap.docs
+    .map((doc) => ({
+      materialId: doc.id,
+      ...doc.data(),
+    }))
+    .sort((a, b) => {
+      const aT = a.uploadedAt?.toMillis?.() || 0;
+      const bT = b.uploadedAt?.toMillis?.() || 0;
+      return bT - aT;
+    });
+
+  return { materials };
 });
 
 // Ob uploadu materiala zapišemo metapodatke v Firestore.
@@ -652,6 +734,39 @@ exports.enqueueNotification = onCall(async (request) => {
 
   await publishNotification(payload);
   return { success: true, topic: notificationsTopic, payload };
+});
+
+// Seznam obvestil (opcijsko filtrirano po eventId).
+exports.listNotifications = onCall(async (request) => {
+  requireAuth(request);
+  const eventId =
+    request.data && typeof request.data.eventId === "string"
+      ? request.data.eventId.trim()
+      : "";
+
+  let snap;
+  if (eventId) {
+    snap = await db
+      .collection("notifications")
+      .where("eventId", "==", eventId)
+      .limit(50)
+      .get();
+  } else {
+    snap = await db.collection("notifications").limit(50).get();
+  }
+
+  const notifications = snap.docs
+    .map((doc) => ({
+      notificationId: doc.id,
+      ...doc.data(),
+    }))
+    .sort((a, b) => {
+      const aT = a.publishedAt?.toMillis?.() || 0;
+      const bT = b.publishedAt?.toMillis?.() || 0;
+      return bT - aT;
+    });
+
+  return { notifications };
 });
 
 // Pub/Sub consumer: shrani obvestilo v Firestore (in kasneje lahko pošilja email).
@@ -812,4 +927,24 @@ exports.generateWeeklyReport = onSchedule("every monday 07:00", async () => {
     totalCancelled,
     generatedAt: FieldValue.serverTimestamp(),
   });
+});
+
+// Admin: seznam poročil iz scheduled funkcij.
+exports.listReports = onCall(async (request) => {
+  const auth = requireAuth(request);
+  await requireAdmin(auth);
+
+  const snap = await db.collection("reports").limit(100).get();
+  const reports = snap.docs
+    .map((doc) => ({
+      reportId: doc.id,
+      ...doc.data(),
+    }))
+    .sort((a, b) => {
+      const aT = a.generatedAt?.toMillis?.() || 0;
+      const bT = b.generatedAt?.toMillis?.() || 0;
+      return bT - aT;
+    });
+
+  return { reports };
 });

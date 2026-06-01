@@ -3,7 +3,7 @@ import { getCallableErrorMessage } from "../api/callable";
 import { useProfile } from "../context/ProfileContext";
 
 export default function ProfileCard() {
-  const { profile, loading, error, loadProfile, saveProfile } = useProfile();
+  const { profile, loading, error, loadProfile, saveProfile, role } = useProfile();
   const [displayName, setDisplayName] = useState("");
   const [faculty, setFaculty] = useState("");
   const [saving, setSaving] = useState(false);
@@ -38,8 +38,8 @@ export default function ProfileCard() {
   if (loading) {
     return (
       <section className="card">
-        <h2>My profile</h2>
-        <p className="muted">Loading profile…</p>
+        <h2>Profile</h2>
+        <p className="muted">Loading…</p>
       </section>
     );
   }
@@ -47,9 +47,9 @@ export default function ProfileCard() {
   if (error && !profile) {
     return (
       <section className="card">
-        <h2>My profile</h2>
+        <h2>Profile</h2>
         <p className="error">{error}</p>
-        <button type="button" onClick={() => loadProfile()}>
+        <button type="button" className="btn btn-primary" onClick={() => loadProfile()}>
           Retry
         </button>
       </section>
@@ -58,25 +58,13 @@ export default function ProfileCard() {
 
   return (
     <section className="card">
-      <div className="card-title-row">
-        <h2>My profile</h2>
-        {profile?.role && (
-          <span className={`role-badge role-${profile.role}`}>
-            {profile.role}
-          </span>
-        )}
+      <div className="card-header-row">
+        <h2>Profile</h2>
+        {role && <span className="role-pill">{role}</span>}
       </div>
+      <p className="muted">{profile?.email}</p>
 
-      <ul className="meta profile-meta">
-        <li>
-          <strong>Email:</strong> {profile?.email || "—"}
-        </li>
-        <li>
-          <strong>UID:</strong> <code>{profile?.uid}</code>
-        </li>
-      </ul>
-
-      <form onSubmit={handleSubmit} className="profile-form">
+      <form onSubmit={handleSubmit} className="form" style={{ marginTop: "1rem" }}>
         <label>
           Display name
           <input
@@ -98,8 +86,8 @@ export default function ProfileCard() {
         </label>
         {saveError && <p className="error">{saveError}</p>}
         {saved && <p className="success">Profile saved.</p>}
-        <button type="submit" disabled={saving}>
-          {saving ? "Saving…" : "Save profile"}
+        <button type="submit" className="btn btn-primary" disabled={saving}>
+          {saving ? "Saving…" : "Save"}
         </button>
       </form>
     </section>

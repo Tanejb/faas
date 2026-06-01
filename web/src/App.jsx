@@ -1,7 +1,10 @@
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { ProfileProvider } from "./context/ProfileContext";
+import { ThemeProvider } from "./context/ThemeContext";
+import { InboxProvider } from "./context/InboxContext";
 import AppShell from "./components/AppShell";
+import LoginHomeRedirect from "./components/LoginHomeRedirect";
 import AuthPage from "./pages/AuthPage";
 import AccountPage from "./pages/AccountPage";
 import EventDetailPage from "./pages/EventDetailPage";
@@ -31,8 +34,10 @@ function AppContent() {
 
   return (
     <ProfileProvider>
-      <BrowserRouter>
-        <Routes>
+      <InboxProvider>
+        <BrowserRouter>
+          <LoginHomeRedirect />
+          <Routes>
           <Route element={<AppShell />}>
             <Route index element={<Navigate to="/events" replace />} />
             <Route path="events" element={<EventsPage />} />
@@ -66,16 +71,19 @@ function AppContent() {
               }
             />
           </Route>
-        </Routes>
-      </BrowserRouter>
+          </Routes>
+        </BrowserRouter>
+      </InboxProvider>
     </ProfileProvider>
   );
 }
 
 export default function App() {
   return (
-    <AuthProvider>
-      <AppContent />
-    </AuthProvider>
+    <ThemeProvider>
+      <AuthProvider>
+        <AppContent />
+      </AuthProvider>
+    </ThemeProvider>
   );
 }

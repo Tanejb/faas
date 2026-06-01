@@ -5,7 +5,6 @@ import * as notificationsApi from "../api/notifications";
 export default function EnqueueNotificationForm({ eventId, onSent }) {
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
-  const [type, setType] = useState("manual");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -18,16 +17,14 @@ export default function EnqueueNotificationForm({ eventId, onSent }) {
     try {
       await notificationsApi.enqueueNotification({
         eventId,
-        type: type.trim() || "manual",
+        type: "announcement",
         title: title.trim(),
         body: body.trim(),
       });
-      setSuccess("Notification queued (Pub/Sub → processNotification).");
+      setSuccess("Sent to registered students (inbox + email).");
       setTitle("");
       setBody("");
-      if (onSent) {
-        setTimeout(onSent, 600);
-      }
+      if (onSent) setTimeout(onSent, 800);
     } catch (err) {
       setError(getCallableErrorMessage(err));
     } finally {
@@ -36,16 +33,7 @@ export default function EnqueueNotificationForm({ eventId, onSent }) {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="notify-form">
-      <label>
-        Type
-        <input
-          type="text"
-          value={type}
-          onChange={(e) => setType(e.target.value)}
-          placeholder="manual"
-        />
-      </label>
+    <form onSubmit={handleSubmit} className="form">
       <label>
         Title
         <input
@@ -66,8 +54,8 @@ export default function EnqueueNotificationForm({ eventId, onSent }) {
       </label>
       {error && <p className="error">{error}</p>}
       {success && <p className="success">{success}</p>}
-      <button type="submit" disabled={sending}>
-        {sending ? "Sending…" : "Send notification"}
+      <button type="submit" className="btn btn-primary" disabled={sending}>
+        {sending ? "Sending…" : "Send to attendees"}
       </button>
     </form>
   );

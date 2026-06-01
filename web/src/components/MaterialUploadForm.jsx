@@ -35,7 +35,7 @@ export default function MaterialUploadForm({ eventId, onUploaded }) {
         },
       });
 
-      setSuccess(`Uploaded ${file.name}. Metadata will appear shortly.`);
+      setSuccess(`${file.name} uploaded.`);
       setFile(null);
       e.target.reset();
       if (onUploaded) onUploaded();
@@ -47,7 +47,7 @@ export default function MaterialUploadForm({ eventId, onUploaded }) {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="upload-form">
+    <form onSubmit={handleSubmit} className="form">
       <label>
         File
         <input
@@ -58,8 +58,8 @@ export default function MaterialUploadForm({ eventId, onUploaded }) {
       </label>
       {error && <p className="error">{error}</p>}
       {success && <p className="success">{success}</p>}
-      <button type="submit" disabled={uploading}>
-        {uploading ? "Uploading…" : "Upload material"}
+      <button type="submit" className="btn btn-primary" disabled={uploading}>
+        {uploading ? "Uploading…" : "Upload"}
       </button>
     </form>
   );

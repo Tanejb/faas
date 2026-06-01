@@ -6,8 +6,6 @@ function mapAuthError(code) {
     "auth/email-already-in-use": "This email is already registered.",
     "auth/invalid-email": "Invalid email address.",
     "auth/weak-password": "Password must be at least 6 characters.",
-    "auth/user-not-found": "No account with this email.",
-    "auth/wrong-password": "Incorrect password.",
     "auth/invalid-credential": "Invalid email or password.",
   };
   return messages[code] || "Authentication failed. Try again.";
@@ -41,26 +39,28 @@ export default function AuthPage() {
     <div className="auth-page">
       <div className="auth-card">
         <h1>CampusHub</h1>
-        <p className="subtitle">Sign in to manage campus events</p>
+        <p className="muted" style={{ textAlign: "center", marginTop: "0.5rem" }}>
+          University events & registrations
+        </p>
 
         <div className="auth-tabs">
           <button
             type="button"
-            className={mode === "login" ? "tab active" : "tab"}
+            className={`btn ${mode === "login" ? "btn-primary" : "btn-ghost"}`}
             onClick={() => setMode("login")}
           >
             Log in
           </button>
           <button
             type="button"
-            className={mode === "register" ? "tab active" : "tab"}
+            className={`btn ${mode === "register" ? "btn-primary" : "btn-ghost"}`}
             onClick={() => setMode("register")}
           >
             Register
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="auth-form">
+        <form onSubmit={handleSubmit} className="form">
           <label>
             Email
             <input
@@ -79,24 +79,14 @@ export default function AuthPage() {
               onChange={(e) => setPassword(e.target.value)}
               required
               minLength={6}
-              autoComplete={
-                mode === "login" ? "current-password" : "new-password"
-              }
+              autoComplete={mode === "login" ? "current-password" : "new-password"}
             />
           </label>
           {authError && <p className="error">{authError}</p>}
-          <button type="submit" disabled={submitting}>
-            {submitting
-              ? "Please wait…"
-              : mode === "login"
-                ? "Log in"
-                : "Create account"}
+          <button type="submit" className="btn btn-primary" disabled={submitting}>
+            {submitting ? "Please wait…" : mode === "login" ? "Log in" : "Create account"}
           </button>
         </form>
-
-        <p className="hint">
-          Uses Firebase Auth emulator when <code>VITE_USE_EMULATORS=true</code>.
-        </p>
       </div>
     </div>
   );

@@ -13,17 +13,12 @@ export default function OrganizerGate({ children }) {
   if (!canOrganize(role)) {
     return (
       <section className="card">
-        <h2>Organizer tools</h2>
-        <p className="error">
-          Your role is <strong>{role || "unknown"}</strong>. Only organizers and
-          admins can create and publish events.
-        </p>
-        <p className="hint">
-          For local testing, set <code>role</code> to <code>organizer</code> in
-          Firestore (<code>users/{"{uid}"}</code>) or ask an admin to use{" "}
-          <code>setUserRole</code> (F7).
-        </p>
-        <Link to="/events">← Back to events</Link>
+        <h2>Organize</h2>
+        <p className="error">Organizer access is required to create events.</p>
+        <p className="muted">Ask an admin to grant you the organizer role.</p>
+        <Link to="/events" className="btn btn-ghost" style={{ marginTop: "1rem" }}>
+          ← Events
+        </Link>
       </section>
     );
   }

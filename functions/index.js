@@ -24,12 +24,47 @@ const db = admin.firestore();
 const storageTriggerBucket = `${process.env.GCLOUD_PROJECT || "demo-campushub"}.appspot.com`;
 const notificationsTopic = "notifications";
 const pubsub = new PubSub();
+const {
+  getAutomationSettings,
+  updateAutomationSettings,
+  shouldRunReminders,
+  shouldRunArchive,
+  shouldRunWeeklyReport,
+} = require("./lib/automationSettings");
+const {
+  runRemindersJob,
+  runArchiveJob,
+  runWeeklyReportJob,
+  runEventStartedJob,
+} = require("./lib/automationJobs");
+const { deliverNotification } = require("./lib/notificationDelivery");
+const { toStoredInstant } = require("./lib/eventTime");
 
 function requireAuth(request) {
   if (!request.auth) {
     throw new HttpsError("unauthenticated", "Authentication is required.");
   }
   return request.auth;
+}
+
+async function getRegisteredCount(db, eventId) {
+  const snap = await db
+    .collection("events")
+    .doc(eventId)
+    .collection("registrations")
+    .where("status", "==", "registered")
+    .get();
+  return snap.size;
+}
+
+function withRegistrationStats(eventId, data, registeredCount) {
+  const capacity = Number(data.capacity || 0);
+  return {
+    eventId,
+    ...data,
+    registeredCount,
+    spotsLeft: Math.max(0, capacity - registeredCount),
+  };
 }
 
 function sanitizeProfileInput(data) {
@@ -237,12 +272,18 @@ exports.createEvent = onCall(async (request) => {
     throw new HttpsError("invalid-argument", "capacity must be greater than 0.");
   }
 
+  const startStored = toStoredInstant(startAt);
+  const endStored = toStoredInstant(endAt);
+  if (!startStored || !endStored) {
+    throw new HttpsError("invalid-argument", "Invalid startAt or endAt.");
+  }
+
   const eventRef = db.collection("events").doc();
   await eventRef.set({
     title,
     description,
-    startAt,
-    endAt,
+    startAt: startStored,
+    endAt: endStored,
     capacity,
     status: "draft",
     organizerId: auth.uid,
@@ -336,10 +377,12 @@ exports.listEvents = onRequest(async (req, res) => {
     .limit(50)
     .get();
 
-  const events = snap.docs.map((doc) => ({
-    eventId: doc.id,
-    ...doc.data(),
-  }));
+  const events = await Promise.all(
+    snap.docs.map(async (doc) => {
+      const registeredCount = await getRegisteredCount(db, doc.id);
+      return withRegistrationStats(doc.id, doc.data(), registeredCount);
+    })
+  );
 
   res.status(200).json({ events });
 });
@@ -369,10 +412,8 @@ exports.getEventDetails = onRequest(async (req, res) => {
     return;
   }
 
-  res.status(200).json({
-    eventId: snap.id,
-    ...data,
-  });
+  const registeredCount = await getRegisteredCount(db, eventId);
+  res.status(200).json(withRegistrationStats(snap.id, data, registeredCount));
 });
 
 // Ob prehodu draft -> published zapišemo dogodek v audit log.
@@ -457,10 +498,14 @@ exports.registerForEvent = onCall(async (request) => {
     );
   });
 
+  const registeredCount = await getRegisteredCount(db, eventId);
+  const capacity = Number(eventData.capacity || 0);
   return {
     eventId,
     userId: auth.uid,
     status: "registered",
+    registeredCount,
+    spotsLeft: Math.max(0, capacity - registeredCount),
   };
 });
 
@@ -488,6 +533,9 @@ exports.cancelRegistration = onCall(async (request) => {
     throw new HttpsError("not-found", "Active registration not found.");
   }
 
+  const eventSnap = await db.collection("events").doc(eventId).get();
+  const capacity = eventSnap.exists ? Number(eventSnap.data().capacity || 0) : 0;
+
   await registrationRef.set(
     {
       status: "cancelled",
@@ -497,10 +545,13 @@ exports.cancelRegistration = onCall(async (request) => {
     { merge: true }
   );
 
+  const registeredCount = await getRegisteredCount(db, eventId);
   return {
     eventId,
     userId: auth.uid,
     status: "cancelled",
+    registeredCount,
+    spotsLeft: Math.max(0, capacity - registeredCount),
   };
 });
 
@@ -545,6 +596,23 @@ exports.onRegistrationCreated = onDocumentCreated(
       severity: "info",
       timestamp: FieldValue.serverTimestamp(),
     });
+
+    if (registration?.status === "registered" && registration.userId) {
+      const eventSnap = await db.collection("events").doc(event.params.eventId).get();
+      const eventTitle = eventSnap.exists ? eventSnap.data().title : "Event";
+      const settings = await getAutomationSettings(db);
+      await deliverNotification(
+        db,
+        {
+          type: "registration_confirmed",
+          eventId: event.params.eventId,
+          recipientUserIds: [registration.userId],
+          title: `Registered: ${eventTitle || "Event"}`,
+          body: "You are registered. We'll remind you before it starts.",
+        },
+        { emailEnabled: settings.emailEnabled !== false }
+      );
+    }
   }
 );
 
@@ -677,6 +745,21 @@ exports.onMaterialUploaded = functionsV1.storage
       size: object.size ? Number(object.size) : null,
       uploadedAt: FieldValue.serverTimestamp(),
     });
+
+    const eventSnap = await db.collection("events").doc(parsed.eventId).get();
+    const eventTitle = eventSnap.exists ? eventSnap.data().title : "Event";
+    const settings = await getAutomationSettings(db);
+    await deliverNotification(
+      db,
+      {
+        type: "material_uploaded",
+        eventId: parsed.eventId,
+        title: `New material: ${eventTitle || "Event"}`,
+        body: `Uploaded: ${parsed.fileName}`,
+        createdAt: new Date().toISOString(),
+      },
+      { emailEnabled: settings.emailEnabled !== false }
+    );
   });
 
 // Ob brisanju materiala počistimo metapodatke.
@@ -769,7 +852,7 @@ exports.listNotifications = onCall(async (request) => {
   return { notifications };
 });
 
-// Pub/Sub consumer: shrani obvestilo v Firestore (in kasneje lahko pošilja email).
+// Pub/Sub consumer: inbox + email + global log.
 exports.processNotification = onMessagePublished(notificationsTopic, async (event) => {
   const msg = event.data.message;
   let payload = {};
@@ -781,16 +864,13 @@ exports.processNotification = onMessagePublished(notificationsTopic, async (even
       const decoded = Buffer.from(msg.data, "base64").toString("utf8");
       payload = JSON.parse(decoded);
     } catch (err) {
-      payload = {
-        rawData: msg.data,
-      };
+      payload = { rawData: msg.data };
     }
   }
 
-  await db.collection("notifications").add({
-    ...payload,
-    messageId: msg.messageId || null,
-    publishedAt: FieldValue.serverTimestamp(),
+  const settings = await getAutomationSettings(db);
+  await deliverNotification(db, payload, {
+    emailEnabled: settings.emailEnabled !== false,
   });
 });
 
@@ -808,125 +888,146 @@ exports.onEventPublishedNotify = onDocumentUpdated("events/{eventId}", async (ev
   await publishNotification({
     type: "event_published",
     eventId: event.params.eventId,
-    title: `Nov dogodek: ${after.title || "CampusHub event"}`,
-    body: "Dogodek je bil pravkar objavljen.",
+    title: `New event: ${after.title || "CampusHub event"}`,
+    body: "A new event was just published. Open CampusHub to register.",
     organizerId: after.organizerId || null,
     createdAt: new Date().toISOString(),
   });
 });
 
-// Korak 6: dnevni opomniki za dogodke, ki so v naslednjih ~24 urah.
+// Hourly tick — reads admin settings for when to run each job.
+exports.automationScheduler = onSchedule("0 * * * *", async () => {
+  const settings = await getAutomationSettings(db);
+  const now = new Date();
+
+  if (shouldRunReminders(now, settings)) {
+    await runRemindersJob(db, settings);
+  }
+  if (shouldRunArchive(now, settings)) {
+    await runArchiveJob(db, settings);
+  }
+  if (shouldRunWeeklyReport(now, settings)) {
+    await runWeeklyReportJob(db, settings);
+  }
+  await runEventStartedJob(db, settings);
+});
+
+// Manual / emulator triggers (also respect settings).
 exports.sendEventReminders = onSchedule("every day 08:00", async () => {
-  const now = new Date();
-  const in24h = new Date(now.getTime() + 24 * 60 * 60 * 1000);
-
-  const snap = await db.collection("events").where("status", "==", "published").get();
-  let remindersSent = 0;
-
-  for (const doc of snap.docs) {
-    const data = doc.data();
-    const start = asDate(data.startAt);
-    if (!start) {
-      continue;
-    }
-    if (start > now && start <= in24h) {
-      await publishNotification({
-        type: "event_reminder",
-        eventId: doc.id,
-        title: `Opomnik: ${data.title || "Dogodek"}`,
-        body: "Dogodek se začne v manj kot 24 urah.",
-        createdAt: new Date().toISOString(),
-      });
-      remindersSent += 1;
-    }
-  }
-
-  await db.collection("reports").add({
-    type: "daily_reminders",
-    remindersSent,
-    generatedAt: FieldValue.serverTimestamp(),
-  });
+  const settings = await getAutomationSettings(db);
+  await runRemindersJob(db, settings);
 });
 
-// Korak 6: tedensko arhiviranje starih dogodkov.
 exports.archiveOldEvents = onSchedule("every sunday 03:00", async () => {
-  const now = new Date();
-  const archivedBefore = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-
-  const snap = await db.collection("events").where("status", "==", "published").get();
-  const batch = db.batch();
-  let archivedCount = 0;
-
-  for (const doc of snap.docs) {
-    const data = doc.data();
-    const end = asDate(data.endAt);
-    if (!end) {
-      continue;
-    }
-    if (end < archivedBefore) {
-      batch.set(
-        doc.ref,
-        {
-          status: "archived",
-          archivedAt: FieldValue.serverTimestamp(),
-          updatedAt: FieldValue.serverTimestamp(),
-        },
-        { merge: true }
-      );
-      archivedCount += 1;
-    }
-  }
-
-  if (archivedCount > 0) {
-    await batch.commit();
-  }
-
-  await db.collection("reports").add({
-    type: "archive_old_events",
-    archivedCount,
-    generatedAt: FieldValue.serverTimestamp(),
-  });
+  const settings = await getAutomationSettings(db);
+  await runArchiveJob(db, settings);
 });
 
-// Korak 6: tedensko poročilo prijav.
 exports.generateWeeklyReport = onSchedule("every monday 07:00", async () => {
-  const now = new Date();
-  const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+  const settings = await getAutomationSettings(db);
+  await runWeeklyReportJob(db, settings);
+});
 
-  const eventsSnap = await db.collection("events").get();
-  let totalRegistrations = 0;
-  let totalCancelled = 0;
+exports.getAutomationSettings = onCall(async (request) => {
+  const auth = requireAuth(request);
+  await requireAdmin(auth);
+  return getAutomationSettings(db);
+});
 
-  for (const eventDoc of eventsSnap.docs) {
-    const regsSnap = await eventDoc.ref.collection("registrations").get();
-    regsSnap.docs.forEach((regDoc) => {
-      const reg = regDoc.data();
-      const updatedAt = reg.updatedAt && reg.updatedAt.toDate
-        ? reg.updatedAt.toDate()
-        : null;
+exports.updateAutomationSettings = onCall(async (request) => {
+  const auth = requireAuth(request);
+  await requireAdmin(auth);
+  const data = request.data || {};
+  const allowed = [
+    "reminderHoursBefore",
+    "reminderRunHour",
+    "archiveAfterDays",
+    "archiveRunHour",
+    "archiveRunDayOfWeek",
+    "weeklyReportDayOfWeek",
+    "weeklyReportRunHour",
+    "emailEnabled",
+  ];
+  const patch = {};
+  for (const key of allowed) {
+    if (data[key] !== undefined) {
+      patch[key] = data[key];
+    }
+  }
+  return updateAutomationSettings(db, patch);
+});
 
-      if (updatedAt && updatedAt < weekAgo) {
-        return;
-      }
-      if (reg.status === "registered") {
-        totalRegistrations += 1;
-      } else if (reg.status === "cancelled") {
-        totalCancelled += 1;
-      }
+exports.runAutomationJob = onCall(async (request) => {
+  const auth = requireAuth(request);
+  await requireAdmin(auth);
+  const job = request.data?.job;
+  const settings = await getAutomationSettings(db);
+  const override = request.data?.settings || {};
+  const merged = { ...settings, ...override };
+  if (job === "reminders") {
+    return runRemindersJob(db, merged, { force: true });
+  }
+  if (job === "archive") return runArchiveJob(db, settings);
+  if (job === "weeklyReport") return runWeeklyReportJob(db, settings);
+  if (job === "eventStarted") {
+    return runEventStartedJob(db, merged, { force: true });
+  }
+  throw new HttpsError(
+    "invalid-argument",
+    "job must be reminders, archive, weeklyReport or eventStarted"
+  );
+});
+
+exports.listMyInbox = onCall(async (request) => {
+  const auth = requireAuth(request);
+  const snap = await db
+    .collection("users")
+    .doc(auth.uid)
+    .collection("inbox")
+    .limit(50)
+    .get();
+
+  const items = snap.docs
+    .map((doc) => ({ id: doc.id, ...doc.data() }))
+    .sort((a, b) => {
+      const aT = a.createdAt?.toMillis?.() || 0;
+      const bT = b.createdAt?.toMillis?.() || 0;
+      return bT - aT;
     });
+
+  const unreadCount = items.filter((i) => !i.read).length;
+  return { items, unreadCount };
+});
+
+exports.markInboxRead = onCall(async (request) => {
+  const auth = requireAuth(request);
+  const inboxId = request.data?.inboxId;
+  const markAll = request.data?.all === true;
+
+  if (markAll) {
+    const snap = await db
+      .collection("users")
+      .doc(auth.uid)
+      .collection("inbox")
+      .where("read", "==", false)
+      .get();
+    const batch = db.batch();
+    snap.docs.forEach((doc) => batch.update(doc.ref, { read: true }));
+    if (!snap.empty) await batch.commit();
+    return { success: true };
   }
 
-  const weekKey = `${now.getUTCFullYear()}-W${Math.ceil(
-    ((now - new Date(Date.UTC(now.getUTCFullYear(), 0, 1))) / 86400000 + 1) / 7
-  )}`;
+  if (typeof inboxId !== "string" || !inboxId) {
+    throw new HttpsError("invalid-argument", "inboxId or all:true required");
+  }
 
-  await db.collection("reports").add({
-    type: "weekly_registrations",
-    week: weekKey,
-    totalRegistrations,
-    totalCancelled,
-    generatedAt: FieldValue.serverTimestamp(),
-  });
+  await db
+    .collection("users")
+    .doc(auth.uid)
+    .collection("inbox")
+    .doc(inboxId)
+    .set({ read: true }, { merge: true });
+  return { success: true };
 });
 
 // Admin: seznam poročil iz scheduled funkcij.

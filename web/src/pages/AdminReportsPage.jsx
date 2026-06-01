@@ -5,13 +5,13 @@ export default function AdminReportsPage() {
   return (
     <>
       <p className="back-link">
-        <Link to="/admin">← Back to admin</Link>
+        <Link to="/admin">← Admin</Link>
       </p>
       <section className="card">
         <h2>Automation reports</h2>
-        <p className="hint">
-          Output from <code>sendEventReminders</code>,{" "}
-          <code>archiveOldEvents</code>, and <code>generateWeeklyReport</code>.
+        <p className="muted">
+          Results from scheduled reminders, archiving, and weekly registration
+          summaries.
         </p>
       </section>
       <ReportsList />

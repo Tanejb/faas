@@ -14,14 +14,13 @@ export default function AdminGate({ children }) {
     return (
       <section className="card">
         <h2>Admin</h2>
-        <p className="error">
-          Admin access only. Your role: <strong>{role || "unknown"}</strong>.
+        <p className="error">You don&apos;t have admin access.</p>
+        <p className="muted">
+          Contact an administrator if you need to manage users or automation.
         </p>
-        <p className="hint">
-          For local testing, set <code>role</code> to <code>admin</code> in
-          Firestore for your user, then refresh the page.
-        </p>
-        <Link to="/events">← Back to events</Link>
+        <Link to="/events" className="btn btn-ghost" style={{ marginTop: "1rem" }}>
+          ← Events
+        </Link>
       </section>
     );
   }

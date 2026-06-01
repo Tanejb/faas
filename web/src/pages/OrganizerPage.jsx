@@ -7,14 +7,22 @@ function formatDate(iso) {
   if (!iso) return "—";
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleString();
+  return d.toLocaleString(undefined, {
+    dateStyle: "medium",
+    timeStyle: "short",
+  });
+}
+
+function toLocalDatetimeInput(date) {
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
 function defaultStartLocal() {
   const d = new Date();
   d.setDate(d.getDate() + 1);
   d.setMinutes(0, 0, 0);
-  return d.toISOString().slice(0, 16);
+  return toLocalDatetimeInput(d);
 }
 
 function defaultEndLocal() {
@@ -22,7 +30,7 @@ function defaultEndLocal() {
   d.setDate(d.getDate() + 1);
   d.setHours(d.getHours() + 2);
   d.setMinutes(0, 0, 0);
-  return d.toISOString().slice(0, 16);
+  return toLocalDatetimeInput(d);
 }
 
 export default function OrganizerPage() {
@@ -64,14 +72,14 @@ export default function OrganizerPage() {
     setCreateError("");
     setCreateSuccess("");
     try {
-      const result = await organizerApi.createEvent({
+      await organizerApi.createEvent({
         title: title.trim(),
         description: description.trim(),
         startAt: new Date(startAt).toISOString(),
         endAt: new Date(endAt).toISOString(),
         capacity: Number(capacity),
       });
-      setCreateSuccess(`Draft created (${result.eventId}).`);
+      setCreateSuccess("Draft saved.");
       setTitle("");
       setDescription("");
       await loadMyEvents();
@@ -97,11 +105,9 @@ export default function OrganizerPage() {
   return (
     <>
       <section className="card">
-        <h2>Create event (draft)</h2>
-        <p className="hint">
-          Callable <code>createEvent</code> — requires organizer or admin role.
-        </p>
-        <form onSubmit={handleCreate} className="event-form">
+        <h2>Create event</h2>
+        <p className="muted">Save as draft, then publish when ready.</p>
+        <form onSubmit={handleCreate} className="form">
           <label>
             Title
             <input
@@ -151,14 +157,14 @@ export default function OrganizerPage() {
           </label>
           {createError && <p className="error">{createError}</p>}
           {createSuccess && <p className="success">{createSuccess}</p>}
-          <button type="submit" disabled={creating}>
-            {creating ? "Creating…" : "Save as draft"}
+          <button type="submit" className="btn btn-primary" disabled={creating}>
+            {creating ? "Saving…" : "Save draft"}
           </button>
         </form>
       </section>
 
       <section className="card">
-        <h2>My events</h2>
+        <h2>Your events</h2>
         {listLoading && <p className="muted">Loading…</p>}
         {listError && <p className="error">{listError}</p>}
         {!listLoading && !listError && myEvents.length === 0 && (
@@ -180,19 +186,20 @@ export default function OrganizerPage() {
               <div className="my-event-actions">
                 <Link
                   to={`/organize/${ev.eventId}/materials`}
-                  className="link-btn"
+                  className="btn btn-ghost"
                 >
                   Materials
                 </Link>
                 <Link
                   to={`/organize/${ev.eventId}/notify`}
-                  className="link-btn"
+                  className="btn btn-ghost"
                 >
                   Notify
                 </Link>
                 {ev.status === "draft" && (
                   <button
                     type="button"
+                    className="btn btn-primary"
                     disabled={publishingId === ev.eventId}
                     onClick={() => handlePublish(ev.eventId)}
                   >
@@ -200,8 +207,8 @@ export default function OrganizerPage() {
                   </button>
                 )}
                 {ev.status === "published" && (
-                  <Link to={`/events/${ev.eventId}`} className="link-btn">
-                    View public page
+                  <Link to={`/events/${ev.eventId}`} className="btn btn-ghost">
+                    View
                   </Link>
                 )}
               </div>

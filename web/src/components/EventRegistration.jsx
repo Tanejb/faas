@@ -4,7 +4,7 @@ import * as registrationsApi from "../api/registrations";
 import { useProfile } from "../context/ProfileContext";
 import { canRegisterForEvents } from "../utils/roles";
 
-export default function EventRegistration({ eventId }) {
+export default function EventRegistration({ eventId, onRegistrationChange }) {
   const { role } = useProfile();
   const [status, setStatus] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -40,7 +40,13 @@ export default function EventRegistration({ eventId }) {
     try {
       const data = await registrationsApi.registerForEvent({ eventId });
       setStatus(data.status);
-      setMessage("You are registered for this event.");
+      setMessage("You are registered. Check your inbox for confirmation.");
+      if (onRegistrationChange) {
+        onRegistrationChange({
+          registeredCount: data.registeredCount,
+          spotsLeft: data.spotsLeft,
+        });
+      }
     } catch (err) {
       setError(getCallableErrorMessage(err));
     } finally {
@@ -56,6 +62,12 @@ export default function EventRegistration({ eventId }) {
       const data = await registrationsApi.cancelRegistration({ eventId });
       setStatus(data.status);
       setMessage("Registration cancelled.");
+      if (onRegistrationChange) {
+        onRegistrationChange({
+          registeredCount: data.registeredCount,
+          spotsLeft: data.spotsLeft,
+        });
+      }
     } catch (err) {
       setError(getCallableErrorMessage(err));
     } finally {
@@ -64,47 +76,40 @@ export default function EventRegistration({ eventId }) {
   }
 
   if (!canRegisterForEvents(role)) {
-    return (
-      <section className="card">
-        <h3>Registration</h3>
-        <p className="muted">
-          Only students (and admins) can register for events. Your role:{" "}
-          <strong>{role || "unknown"}</strong>.
-        </p>
-      </section>
-    );
+    return null;
   }
 
   return (
     <section className="card">
       <h3>Registration</h3>
-      {loading && <p className="muted">Checking registration status…</p>}
+      {loading && <p className="muted">Loading…</p>}
       {!loading && (
         <>
-          <p className="registration-status">
+          <p className="muted">
             Status:{" "}
             <strong>
               {status === "registered"
                 ? "Registered"
                 : status === "cancelled"
-                  ? "Cancelled (not registered)"
+                  ? "Cancelled"
                   : "Not registered"}
             </strong>
           </p>
-          <div className="registration-actions">
+          <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
             {status !== "registered" && (
               <button
                 type="button"
+                className="btn btn-primary"
                 onClick={handleRegister}
                 disabled={actionLoading}
               >
-                {actionLoading ? "Working…" : "Register for event"}
+                {actionLoading ? "Working…" : "Register"}
               </button>
             )}
             {status === "registered" && (
               <button
                 type="button"
-                className="btn-secondary"
+                className="btn btn-danger-ghost"
                 onClick={handleCancel}
                 disabled={actionLoading}
               >

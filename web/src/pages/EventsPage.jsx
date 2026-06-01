@@ -6,7 +6,10 @@ function formatDate(iso) {
   if (!iso) return "—";
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleString();
+  return d.toLocaleString(undefined, {
+    dateStyle: "medium",
+    timeStyle: "short",
+  });
 }
 
 export default function EventsPage() {
@@ -36,27 +39,30 @@ export default function EventsPage() {
 
   return (
     <section className="card">
-      <h2>Published events</h2>
-      <p className="hint">Public list from <code>listEvents</code> (HTTP GET).</p>
-
-      {loading && <p className="muted">Loading events…</p>}
+      <h2>Upcoming events</h2>
+      {loading && <p className="muted">Loading…</p>}
       {error && <p className="error">{error}</p>}
-
       {!loading && !error && events.length === 0 && (
-        <p className="muted">No published events yet.</p>
+        <p className="muted">No published events yet. Check back later.</p>
       )}
-
       <ul className="event-list">
-        {events.map((ev) => (
-          <li key={ev.eventId} className="event-item">
-            <Link to={`/events/${ev.eventId}`} className="event-link">
-              <span className="event-title">{ev.title}</span>
-              <span className="event-meta">
-                {formatDate(ev.startAt)} · capacity {ev.capacity}
-              </span>
-            </Link>
-          </li>
-        ))}
+        {events.map((ev) => {
+          const registered = ev.registeredCount ?? 0;
+          const capacity = ev.capacity ?? 0;
+          const left =
+            ev.spotsLeft ?? Math.max(0, capacity - registered);
+          return (
+            <li key={ev.eventId} className="event-item">
+              <Link to={`/events/${ev.eventId}`} className="event-link">
+                <span className="event-title">{ev.title}</span>
+                <span className="event-meta">
+                  {formatDate(ev.startAt)} · {registered}/{capacity} registered
+                  {left <= 0 ? " · Full" : ` · ${left} left`}
+                </span>
+              </Link>
+            </li>
+          );
+        })}
       </ul>
     </section>
   );

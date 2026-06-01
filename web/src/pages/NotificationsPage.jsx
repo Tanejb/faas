@@ -1,14 +1,14 @@
-import NotificationsList from "../components/NotificationsList";
+import InboxList from "../components/InboxList";
 
 export default function NotificationsPage() {
   return (
     <section className="card">
-      <h2>Notifications</h2>
-      <p className="hint">
-        Messages processed via Pub/Sub (<code>enqueueNotification</code> →{" "}
-        <code>processNotification</code>).
+      <h2>Inbox</h2>
+      <p className="muted">
+        Event updates, reminders, and announcements. Email copies are sent when
+        configured on the server.
       </p>
-      <NotificationsList />
+      <InboxList />
     </section>
   );
 }

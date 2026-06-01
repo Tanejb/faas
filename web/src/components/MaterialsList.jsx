@@ -10,27 +10,52 @@ function formatSize(bytes) {
   return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
 }
 
-export default function MaterialsList({ eventId, refreshKey = 0 }) {
+export default function MaterialsList({
+  eventId,
+  refreshKey = 0,
+  pollUntil = 0,
+}) {
   const [materials, setMaterials] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError("");
-    try {
-      const data = await materialsApi.listEventMaterials({ eventId });
-      setMaterials(data.materials || []);
-    } catch (err) {
-      setError(getCallableErrorMessage(err));
-    } finally {
-      setLoading(false);
-    }
-  }, [eventId]);
+  const load = useCallback(
+    async (silent = false) => {
+      if (!silent) {
+        setLoading(true);
+      }
+      setError("");
+      try {
+        const data = await materialsApi.listEventMaterials({ eventId });
+        setMaterials(data.materials || []);
+      } catch (err) {
+        setError(getCallableErrorMessage(err));
+      } finally {
+        if (!silent) {
+          setLoading(false);
+        }
+      }
+    },
+    [eventId]
+  );
 
   useEffect(() => {
     load();
   }, [load, refreshKey]);
+
+  useEffect(() => {
+    if (!pollUntil || Date.now() >= pollUntil) {
+      return undefined;
+    }
+    const id = setInterval(() => {
+      if (Date.now() >= pollUntil) {
+        clearInterval(id);
+        return;
+      }
+      load(true);
+    }, 2000);
+    return () => clearInterval(id);
+  }, [pollUntil, load]);
 
   if (loading) {
     return <p className="muted">Loading materials…</p>;
@@ -40,7 +65,7 @@ export default function MaterialsList({ eventId, refreshKey = 0 }) {
     return (
       <>
         <p className="error">{error}</p>
-        <button type="button" onClick={load}>
+        <button type="button" className="btn btn-ghost" onClick={() => load()}>
           Retry
         </button>
       </>
